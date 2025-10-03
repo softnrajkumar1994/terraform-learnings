@@ -13,6 +13,19 @@ terraform {
   required_version = ">= 1.5.0"
 }
 
+# Variables for resource naming and conflict avoidance
+variable "resource_prefix" {
+  description = "Prefix for resource names to avoid conflicts"
+  type        = string
+  default     = "tf-demo"
+}
+
+variable "environment" {
+  description = "Environment name"
+  type        = string
+  default     = "dev"
+}
+
 provider "aws" {
   region = "ap-south-1"
 }
@@ -66,7 +79,7 @@ resource "aws_route_table_association" "b" {
 # IAM Roles for EKS
 # --------------------------
 resource "aws_iam_role" "eks_role" {
-  name = "eks-cluster-role"
+  name = "eks-cluster-rolea"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
@@ -85,7 +98,7 @@ resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
 
 # Node group IAM role
 resource "aws_iam_role" "eks_node_role" {
-  name = "eks-node-role"
+  name = "eks-node-rolea"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
@@ -362,7 +375,7 @@ resource "aws_security_group" "ec2_sg" {
 }
 
 resource "aws_instance" "ec2" {
-  ami                    = "ami-0cdb817a5a07e4a8b" # Amazon Linux 2 in ap-south-1
+  ami                    = "ami-00d892bc42a247508" # Amazon Linux 2 in ap-south-1
   instance_type          = "t3.micro"
   subnet_id              = aws_subnet.subnet_a.id
   vpc_security_group_ids = [aws_security_group.ec2_sg.id]
@@ -640,7 +653,7 @@ resource "random_id" "rand" {
 }
 
 resource "aws_iam_role" "lambda_role" {
-  name = "lambda-role"
+  name = "${var.resource_prefix}-lambda-role-${var.environment}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
@@ -650,6 +663,12 @@ resource "aws_iam_role" "lambda_role" {
       Principal = { Service = "lambda.amazonaws.com" }
     }]
   })
+
+  tags = {
+    Name        = "${var.resource_prefix}-lambda-role"
+    Environment = var.environment
+    ManagedBy   = "Terraform"
+  }
 }
 
 resource "aws_iam_role_policy_attachment" "lambda_basic" {
@@ -658,7 +677,7 @@ resource "aws_iam_role_policy_attachment" "lambda_basic" {
 }
 
 resource "aws_lambda_function" "s3_lambda" {
-  function_name = "s3-hello-world"
+  function_name = "${var.resource_prefix}-s3-hello-world-${var.environment}"
   role          = aws_iam_role.lambda_role.arn
   handler       = "index.handler"
   runtime       = "python3.9"
