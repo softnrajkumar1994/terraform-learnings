@@ -127,12 +127,22 @@ resource "aws_security_group" "eks_nodes_sg" {
     self      = true
   }
 
-  # Allow traffic from ALB on NodePort range
+  # Allow traffic from ALB on specific NodePort (30080)
+  ingress {
+    from_port       = 30080
+    to_port         = 30080
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb_sg.id]
+    description     = "Allow ALB to access nginx NodePort"
+  }
+
+  # Allow traffic from ALB on full NodePort range (for other services)
   ingress {
     from_port       = 30000
     to_port         = 32767
     protocol        = "tcp"
     security_groups = [aws_security_group.alb_sg.id]
+    description     = "Allow ALB to access NodePort range"
   }
 
   # Allow traffic from control plane
@@ -141,6 +151,7 @@ resource "aws_security_group" "eks_nodes_sg" {
     to_port     = 443
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow kubectl access"
   }
 
   egress {
@@ -250,7 +261,8 @@ resource "kubernetes_service" "nginx" {
     name      = "nginx-service"
     namespace = kubernetes_namespace.example.metadata[0].name
     annotations = {
-      "service.beta.kubernetes.io/aws-load-balancer-type" = "nlb"
+      # Use a fixed NodePort for ALB target group
+      "service.beta.kubernetes.io/aws-load-balancer-type" = "external"
     }
   }
 
@@ -260,6 +272,7 @@ resource "kubernetes_service" "nginx" {
       port        = 80
       target_port = 80
       protocol    = "TCP"
+      node_port   = 30080 # Fixed NodePort for ALB integration
     }
     type = "NodePort"
   }
@@ -267,26 +280,48 @@ resource "kubernetes_service" "nginx" {
   depends_on = [aws_eks_node_group.eks_nodes]
 }
 
-
-
-# Get EKS node group instances to register with ALB
-data "aws_instances" "eks_nodes" {
-  instance_tags = {
-    "eks:cluster-name" = aws_eks_cluster.eks.name
+# Create Kubernetes Ingress for ALB integration (alternative approach)
+resource "kubernetes_ingress_v1" "nginx_ingress" {
+  metadata {
+    name      = "nginx-ingress"
+    namespace = kubernetes_namespace.example.metadata[0].name
+    annotations = {
+      "kubernetes.io/ingress.class"                    = "alb"
+      "alb.ingress.kubernetes.io/scheme"               = "internet-facing"
+      "alb.ingress.kubernetes.io/target-type"          = "ip"
+      "alb.ingress.kubernetes.io/healthcheck-path"     = "/"
+      "alb.ingress.kubernetes.io/healthcheck-protocol" = "HTTP"
+      "alb.ingress.kubernetes.io/listen-ports"         = "[{\"HTTP\": 80}]"
+    }
   }
 
-  instance_state_names = ["running"]
+  spec {
+    rule {
+      http {
+        path {
+          path      = "/eks"
+          path_type = "Prefix"
+          backend {
+            service {
+              name = kubernetes_service.nginx.metadata[0].name
+              port {
+                number = 80
+              }
+            }
+          }
+        }
+      }
+    }
+  }
 
-  depends_on = [aws_eks_node_group.eks_nodes]
+  depends_on = [kubernetes_service.nginx]
 }
 
-# Register EKS nodes with the target group
-resource "aws_lb_target_group_attachment" "eks_nodes" {
-  count            = length(data.aws_instances.eks_nodes.ids)
-  target_group_arn = aws_lb_target_group.eks_tg.arn
-  target_id        = data.aws_instances.eks_nodes.ids[count.index]
-  port             = 30000 # NodePort range - adjust based on actual NodePort assigned
-}
+
+
+# Note: EKS nodes are automatically registered with the ALB target group
+# via the autoscaling group attachment. The nginx service uses a fixed
+# NodePort (30080) for consistent routing.
 
 # --------------------------
 # EC2 Instance (bastion/router)
@@ -419,10 +454,10 @@ resource "aws_lb_target_group_attachment" "ec2_attachment" {
   port             = 80
 }
 
-# Target Group for EKS (NodePort service)
+# Target Group for EKS (NodePort service on fixed port 30080)
 resource "aws_lb_target_group" "eks_tg" {
   name        = "eks-target-group"
-  port        = 30000
+  port        = 30080 # Fixed NodePort defined in kubernetes_service
   protocol    = "HTTP"
   vpc_id      = aws_vpc.main.id
   target_type = "instance"
@@ -433,13 +468,26 @@ resource "aws_lb_target_group" "eks_tg" {
     interval            = 30
     matcher             = "200,404"
     path                = "/"
-    port                = "traffic-port"
+    port                = "30080"
     protocol            = "HTTP"
     timeout             = 5
     unhealthy_threshold = 2
   }
 
   tags = { Name = "eks-tg" }
+}
+
+# Get EKS node instances for target group attachment
+data "aws_autoscaling_group" "eks_nodes" {
+  name = aws_eks_node_group.eks_nodes.resources[0].autoscaling_groups[0].name
+
+  depends_on = [aws_eks_node_group.eks_nodes]
+}
+
+# Use autoscaling attachment to automatically register/deregister nodes
+resource "aws_autoscaling_attachment" "eks_nodes_to_alb" {
+  autoscaling_group_name = data.aws_autoscaling_group.eks_nodes.name
+  lb_target_group_arn    = aws_lb_target_group.eks_tg.arn
 }
 
 # ALB Listener - Default routes to EC2
@@ -684,6 +732,17 @@ output "s3_bucket_name" {
   value       = aws_s3_bucket.bucket.id
 }
 
+
+output "nginx_nodeport" {
+  description = "NodePort assigned to nginx service"
+  value       = 30080
+}
+
+output "eks_autoscaling_group" {
+  description = "EKS node group autoscaling group name"
+  value       = try(data.aws_autoscaling_group.eks_nodes.name, "Not yet created")
+}
+
 output "traffic_routing_info" {
   description = "Traffic routing information"
   value = {
@@ -700,9 +759,14 @@ output "traffic_routing_info" {
       default_route = "http://${aws_lb.main.dns_name}/"
     }
     routing_rules = {
-      "/eks/*"  = "Routes to EKS cluster (nginx pods)"
+      "/eks/*"  = "Routes to EKS cluster (nginx pods on NodePort 30080)"
       "/ec2/*"  = "Routes to EC2 instance"
       "default" = "Routes to EC2 instance"
+    }
+    eks_details = {
+      nodeport            = 30080
+      target_group_port   = 30080
+      autoscaling_enabled = true
     }
   }
 }

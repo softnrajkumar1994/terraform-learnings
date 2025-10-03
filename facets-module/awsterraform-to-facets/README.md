@@ -192,12 +192,11 @@ aws s3 cp test.txt s3://$BUCKET/
 
 ## Important Notes
 
-1. **NodePort Configuration**: The EKS target group uses port 30000. You may need to adjust this based on the actual NodePort assigned to the nginx service. Check with:
-   ```bash
-   kubectl get svc -n example nginx-service
-   ```
+1. **Fixed NodePort Configuration**: The nginx service uses a **fixed NodePort 30080** for consistent routing. This is configured in the Kubernetes service definition and matched in the ALB target group.
 
-2. **Health Checks**: The EKS target group health check accepts both 200 and 404 status codes to handle routing during initialization.
+2. **Autoscaling Integration**: EKS nodes are automatically registered/deregistered with the ALB target group via AWS autoscaling group attachment. No manual intervention needed when nodes scale up or down.
+
+3. **Health Checks**: The EKS target group health check accepts both 200 and 404 status codes to handle routing during initialization.
 
 3. **Cost**: This infrastructure will incur AWS costs. Remember to destroy when not needed:
    ```bash
