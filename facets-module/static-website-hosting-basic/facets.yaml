@@ -1,0 +1,115 @@
+intent: static-website-hosting
+flavor: basic
+version: '1.0'
+clouds:
+- aws
+description: Creates an S3 bucket configured for static website hosting with lifecycle
+  policies, versioning, and customizable bucket naming
+spec:
+  title: Static Website Hosting S3 Bucket
+  description: Creates an S3 bucket configured for static website hosting with lifecycle
+    policies, versioning, and customizable bucket naming
+  type: object
+  properties:
+    bucket_name:
+      type: string
+      title: S3 Bucket Name
+      description: Name of the S3 bucket (must follow AWS naming rules)
+      pattern: ^[a-z0-9][a-z0-9-]*[a-z0-9]$
+      minLength: 3
+      maxLength: 63
+      x-ui-error-message: Bucket name must be 3-63 characters, lowercase alphanumeric
+        with hyphens, cannot start/end with hyphen
+    enable_versioning:
+      type: boolean
+      title: Enable Versioning
+      description: Enable S3 object versioning for the bucket
+      default: true
+    index_document:
+      type: string
+      title: Index Document
+      description: Index document for static website
+      default: index.html
+      pattern: ^[a-zA-Z0-9._-]+\.[a-zA-Z0-9]+$
+    error_document:
+      type: string
+      title: Error Document
+      description: Error document for static website
+      default: error.html
+      pattern: ^[a-zA-Z0-9._-]+\.[a-zA-Z0-9]+$
+    lifecycle_rules:
+      type: object
+      title: Lifecycle Management
+      description: Object lifecycle management settings
+      x-ui-toggle: true
+      properties:
+        transition_to_ia_days:
+          type: number
+          title: Days to IA Transition
+          description: Number of days after which objects transition to Infrequent
+            Access
+          default: 30
+          minimum: 1
+          maximum: 365
+        transition_to_glacier_days:
+          type: number
+          title: Days to Glacier Transition
+          description: Number of days after which objects transition to Glacier
+          default: 90
+          minimum: 1
+          maximum: 365
+        expiration_days:
+          type: number
+          title: Object Expiration Days
+          description: Number of days after which objects are permanently deleted
+          default: 365
+          minimum: 1
+          maximum: 3650
+        noncurrent_version_expiration_days:
+          type: number
+          title: Non-current Version Expiration
+          description: Number of days after which non-current versions are deleted
+          default: 30
+          minimum: 1
+          maximum: 365
+    enable_public_read_access:
+      type: boolean
+      title: Enable Public Read Access
+      description: Allow public read access for static website hosting
+      default: true
+    cors_allowed_origins:
+      type: string
+      title: CORS Allowed Origins
+      description: Comma-separated list of allowed origins for CORS requests (use
+        * for all origins)
+      default: '*'
+      pattern: ^(\*|https?://[a-zA-Z0-9.-]+(?::[0-9]+)?(?:,\s*https?://[a-zA-Z0-9.-]+(?::[0-9]+)?)*)$
+    force_destroy:
+      type: boolean
+      title: Force Destroy
+      description: Allow Terraform to destroy bucket even if it contains objects (use
+        with caution)
+      default: false
+      x-ui-error-message: Enabling this will allow deletion of bucket with all contents
+  required:
+  - bucket_name
+outputs:
+  default:
+    type: '@outputs/s3'
+    title: S3 Static Website Configuration
+iac:
+  validated_files:
+  - main.tf
+  - variables.tf
+sample:
+  kind: static-website-hosting
+  flavor: basic
+  version: '1.0'
+  disabled: true
+  spec:
+    enable_versioning: true
+    index_document: index.html
+    error_document: error.html
+    enable_public_read_access: true
+    cors_allowed_origins: '*'
+    force_destroy: false

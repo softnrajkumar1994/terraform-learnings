@@ -1,0 +1,93 @@
+intent: s3
+flavor: static-website-s3
+clouds:
+  - aws
+
+version: 1.2
+
+spec:
+  type: object
+  properties:
+    bucket_name:
+      type: string
+      description: "Optional fixed bucket name (must be globally unique). If empty, bucket_prefix is used instead."
+      default: ""
+    bucket_prefix:
+      type: string
+      description: "Prefix used to generate a unique bucket name when bucket_name is empty."
+      default: "website-"
+    acl:
+      type: string
+      description: "The canned ACL to apply to the bucket."
+      enum: ["private", "public-read", "public-read-write", "authenticated-read"]
+      default: "private"
+    versioning:
+      type: boolean
+      description: "Enable versioning for the bucket."
+      default: false
+    sse_algorithm:
+      type: string
+      description: "The server-side encryption algorithm to use."
+      enum: ["AES256", "aws:kms"]
+      default: "AES256"
+    enable_website:
+      type: boolean
+      description: "Enable S3 static website hosting configuration."
+      default: true
+    website_index_document:
+      type: string
+      description: "Index document for S3 static website hosting."
+      default: "index.html"
+    website_error_document:
+      type: string
+      description: "Error document for S3 static website hosting."
+      default: "error.html"
+    enable_public_policy:
+      type: boolean
+      description: "Attach a public-read bucket policy for website content (anonymous GetObject)."
+      default: true
+    force_destroy:
+      type: boolean
+      description: "Allow bucket to be destroyed even if it contains objects."
+      default: false
+    tags:
+      type: object
+      description: "Tags to apply to the bucket."
+      additionalProperties: { type: string }
+      default: {}
+  required:
+    - acl
+    - versioning
+
+sample:
+  kind: s3
+  flavor: static-website-s3
+  version: "1.2"
+  spec:
+    acl: "private"
+    versioning: false
+    sse_algorithm: "AES256"
+    enable_website: true
+    enable_public_policy: true
+    force_destroy: false
+    tags: {}
+
+inputs:
+  cloud_account:
+    type: "@outputs/aws_account"
+    providers:
+      - aws
+
+outputs:
+  attributes.bucket_name:
+    title: Bucket Name
+    type: "@outputs/bucket_name"
+  attributes.bucket_arn:
+    title: Bucket Arn
+    type: "@outputs/arn"
+  attributes.website_endpoint:
+    title: Website Endpoint
+    type: "@outputs/hostname"
+  attributes.website_domain:
+    title: Website Domain
+    type: "@outputs/hostname"

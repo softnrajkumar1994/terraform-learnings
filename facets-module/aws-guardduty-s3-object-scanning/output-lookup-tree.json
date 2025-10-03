@@ -1,0 +1,16 @@
+{
+    "out": {
+        "attributes": {
+            "detector_id": {},
+            "detector_arn": {},
+            "account_id": {},
+            "s3_protection_enabled": {},
+            "malware_protection_enabled": {},
+            "finding_publishing_frequency": {},
+            "notification_topic_arn": {},
+            "protection_level": {},
+            "threat_severity_threshold": {}
+        },
+        "interfaces": {}
+    }
+}

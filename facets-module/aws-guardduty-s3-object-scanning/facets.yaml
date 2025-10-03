@@ -1,0 +1,74 @@
+intent: aws-guardduty-s3
+flavor: object-scanning
+version: '1.0'
+clouds:
+- aws
+description: Enables Amazon GuardDuty with S3 object scanning and malware protection
+spec:
+  title: AWS GuardDuty S3 Protection
+  description: Enables Amazon GuardDuty with S3 object scanning and malware protection
+  type: object
+  properties:
+    enable_malware_protection:
+      type: boolean
+      title: Enable Malware Protection
+      description: Controls whether GuardDuty scans S3 objects for malware and suspicious
+        files
+      default: true
+    s3_protection_level:
+      type: string
+      title: S3 Protection Level
+      description: Sets protection level for S3 scanning
+      default: basic
+      enum:
+      - basic
+      - enhanced
+    notification_enabled:
+      type: boolean
+      title: Enable Notifications
+      description: Enables SNS notifications when threats are detected in S3 objects
+      default: false
+    auto_enable_s3_logs:
+      type: boolean
+      title: Auto Enable S3 Logs
+      description: Automatically enable S3 data event logging for comprehensive monitoring
+      default: true
+    finding_retention_days:
+      type: number
+      title: Finding Retention Days
+      description: Number of days to retain GuardDuty findings
+      default: 90
+      minimum: 1
+      maximum: 365
+    threat_severity_threshold:
+      type: string
+      title: Threat Severity Threshold
+      description: Minimum severity level for notifications
+      default: MEDIUM
+      enum:
+      - LOW
+      - MEDIUM
+      - HIGH
+  required:
+  - enable_malware_protection
+  - s3_protection_level
+  - auto_enable_s3_logs
+outputs:
+  default:
+    type: '@outputs/service'
+    title: GuardDuty S3 Protection Configuration
+iac:
+  validated_files:
+  - main.tf
+  - variables.tf
+sample:
+  kind: aws-guardduty-s3
+  flavor: object-scanning
+  version: '1.0'
+  disabled: true
+  spec:
+    enable_malware_protection: true
+    s3_protection_level: basic
+    auto_enable_s3_logs: true
+    finding_retention_days: 90
+    threat_severity_threshold: MEDIUM
